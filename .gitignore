@@ -1,0 +1,11 @@
+# Environment variables / secrets
+.env
+.env.local
+.env.*.local
+backend/venv/
+backend/__pycache__/
+*.pyc
+frontend/chatflow/node_modules/
+frontend/chatflow/.next/
+frontend/chatflow/out/
+.vscode/

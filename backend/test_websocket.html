@@ -1,0 +1,361 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>ChatFlow Real-Time Chat Test</title>
+</head>
+
+<body>
+
+    <h1>ChatFlow Real-Time Chat Test</h1>
+
+    <h3>WebSocket Connection</h3>
+
+    <input
+        id="tokenInput"
+        type="text"
+        placeholder="Paste JWT token"
+        style="width: 500px;"
+    />
+
+    <button onclick="connectWebSocket()">
+        Connect
+    </button>
+
+    <p id="status">
+        Not connected
+    </p>
+
+    <hr>
+
+    <h3>Chat</h3>
+
+    <input
+        id="conversationInput"
+        type="number"
+        placeholder="Conversation ID"
+    />
+
+    <br><br>
+
+    <input
+        id="messageInput"
+        type="text"
+        placeholder="Write a message"
+        style="width: 300px;"
+        oninput="handleTyping()"
+        onkeydown="handleEnter(event)"
+    />
+
+    <button onclick="sendMessage()">
+        Send
+    </button>
+
+    <p id="typingStatus"></p>
+
+    <hr>
+
+    <h3>Messages</h3>
+
+    <div id="messages"></div>
+
+
+    <script>
+
+        let socket = null;
+
+        let typingTimer = null;
+
+
+        // ==========================================
+        // CONNECT WEBSOCKET
+        // ==========================================
+
+        function connectWebSocket() {
+
+            const token =
+                document
+                    .getElementById("tokenInput")
+                    .value
+                    .trim();
+
+
+            if (!token) {
+
+                alert("Please enter your JWT token.");
+
+                return;
+            }
+
+
+            socket = new WebSocket(
+                `ws://127.0.0.1:8000/ws?token=${token}`
+            );
+
+
+            socket.onopen = function () {
+
+                document
+                    .getElementById("status")
+                    .innerText =
+                    "Connected to WebSocket";
+
+            };
+
+
+            socket.onmessage = function (event) {
+
+                const data = JSON.parse(event.data);
+
+
+                // ==================================
+                // ERROR
+                // ==================================
+
+                if (data.type === "error") {
+
+                    const errorElement =
+                        document.createElement("p");
+
+                    errorElement.innerText =
+                        `Error: ${data.message}`;
+
+                    document
+                        .getElementById("messages")
+                        .appendChild(errorElement);
+
+                    return;
+                }
+
+
+                // ==================================
+                // CHAT MESSAGE
+                // ==================================
+
+                if (data.type === "message") {
+
+                    const messageElement =
+                        document.createElement("p");
+
+
+                    messageElement.innerText =
+                        `User ${data.sender_id}: ${data.content}`;
+
+
+                    document
+                        .getElementById("messages")
+                        .appendChild(messageElement);
+
+                    return;
+                }
+
+
+                // ==================================
+                // TYPING INDICATOR
+                // ==================================
+
+                if (data.type === "typing") {
+
+                    const typingStatus =
+                        document.getElementById(
+                            "typingStatus"
+                        );
+
+
+                    if (data.is_typing) {
+
+                        typingStatus.innerText =
+                            `User ${data.user_id} is typing...`;
+
+                    } else {
+
+                        typingStatus.innerText = "";
+
+                    }
+
+                    return;
+                }
+
+            };
+
+
+            socket.onclose = function () {
+
+                document
+                    .getElementById("status")
+                    .innerText =
+                    "WebSocket disconnected";
+
+            };
+
+
+            socket.onerror = function () {
+
+                document
+                    .getElementById("status")
+                    .innerText =
+                    "WebSocket connection error";
+
+            };
+
+        }
+
+
+        // ==========================================
+        // SEND MESSAGE
+        // ==========================================
+
+        function sendMessage() {
+
+            const conversationId =
+                document
+                    .getElementById("conversationInput")
+                    .value;
+
+
+            const message =
+                document
+                    .getElementById("messageInput")
+                    .value
+                    .trim();
+
+
+            if (!conversationId) {
+
+                alert("Enter conversation ID.");
+
+                return;
+            }
+
+
+            if (!message) {
+
+                alert("Write a message.");
+
+                return;
+            }
+
+
+            if (
+                !socket ||
+                socket.readyState !== WebSocket.OPEN
+            ) {
+
+                alert("WebSocket is not connected.");
+
+                return;
+            }
+
+
+            const data = {
+
+                type: "message",
+
+                conversation_id:
+                    Number(conversationId),
+
+                content: message
+
+            };
+
+
+            socket.send(
+                JSON.stringify(data)
+            );
+
+
+            document
+                .getElementById("messageInput")
+                .value = "";
+
+        }
+
+
+        // ==========================================
+        // TYPING INDICATOR
+        // ==========================================
+
+        function handleTyping() {
+
+            const conversationId =
+                document
+                    .getElementById("conversationInput")
+                    .value;
+
+
+            if (
+                !conversationId ||
+                !socket ||
+                socket.readyState !== WebSocket.OPEN
+            ) {
+
+                return;
+            }
+
+
+            // Tell backend that user is typing
+
+            socket.send(
+                JSON.stringify({
+
+                    type: "typing",
+
+                    conversation_id:
+                        Number(conversationId),
+
+                    is_typing: true
+
+                })
+            );
+
+
+            // Clear previous timer
+
+            clearTimeout(typingTimer);
+
+
+            // After 1 second, tell backend
+            // that typing has stopped
+
+            typingTimer = setTimeout(
+                function () {
+
+                    socket.send(
+                        JSON.stringify({
+
+                            type: "typing",
+
+                            conversation_id:
+                                Number(conversationId),
+
+                            is_typing: false
+
+                        })
+                    );
+
+                },
+                1000
+            );
+
+        }
+
+
+        // ==========================================
+        // ENTER KEY
+        // ==========================================
+
+        function handleEnter(event) {
+
+            if (event.key === "Enter") {
+
+                sendMessage();
+
+            }
+
+        }
+
+    </script>
+
+</body>
+
+</html>

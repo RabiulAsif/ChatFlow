@@ -22,6 +22,11 @@ conf = ConnectionConfig(
     USE_CREDENTIALS=True,
 )
 
+# Your live frontend URL in production (set FRONTEND_URL in Render's
+# environment variables once Vercel gives you a domain). Falls back to
+# localhost for local development.
+FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:3000")
+
 
 async def send_verification_email(
     email: str,
@@ -29,7 +34,7 @@ async def send_verification_email(
     token: str,
 ):
     verification_link = (
-        f"http://localhost:3000/verify-email?token={token}"
+        f"{FRONTEND_URL}/verify-email?token={token}"
     )
 
     html = f"""

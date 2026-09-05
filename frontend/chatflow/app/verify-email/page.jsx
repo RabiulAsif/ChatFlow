@@ -1,11 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 
-const API_URL = "http://127.0.0.1:8000";
+const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
 
-export default function VerifyEmailPage() {
+function VerifyEmailContent() {
     const searchParams = useSearchParams();
     const token = searchParams.get("token");
 
@@ -113,5 +113,24 @@ export default function VerifyEmailPage() {
 
             </div>
         </main>
+    );
+}
+
+export default function VerifyEmailPage() {
+    return (
+        <Suspense
+            fallback={
+                <main className="min-h-screen flex items-center justify-center bg-gray-100 px-4">
+                    <div className="w-full max-w-md rounded-2xl bg-white p-8 text-center shadow-lg">
+                        <div className="mx-auto mb-5 h-12 w-12 animate-spin rounded-full border-4 border-gray-200 border-t-blue-600"></div>
+                        <h1 className="text-2xl font-bold text-gray-900">
+                            Loading...
+                        </h1>
+                    </div>
+                </main>
+            }
+        >
+            <VerifyEmailContent />
+        </Suspense>
     );
 }

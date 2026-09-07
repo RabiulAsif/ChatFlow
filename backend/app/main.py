@@ -1,6 +1,8 @@
 from fastapi import Depends, FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from fastapi.middleware.cors import CORSMiddleware
+from google.auth.transport import requests as google_requests
+from google.oauth2 import id_token as google_id_token
 from sqlalchemy.orm import Session
 import os
 import secrets
@@ -15,6 +17,7 @@ from app.database import Base, SessionLocal, engine
 from app.email_service import send_verification_email
 from app.schemas import (
     ConversationCreate,
+    GoogleAuthRequest,
     MessageCreate,
     MessageResponse,
     Token,
@@ -22,6 +25,10 @@ from app.schemas import (
     UserLogin,
 )
 from app.websocket_manager import ConnectionManager
+# --------------------------------------------------
+# Google OAuth
+# --------------------------------------------------
+GOOGLE_CLIENT_ID = os.environ.get("GOOGLE_CLIENT_ID")
 # --------------------------------------------------
 # FastAPI Application
 # --------------------------------------------------
@@ -227,6 +234,80 @@ def login(user: UserLogin):
         return {
             "access_token": access_token,
             "token_type": "bearer"
+        }
+    finally:
+        db.close()
+# --------------------------------------------------
+# Google Sign-In
+# --------------------------------------------------
+@app.post("/auth/google", response_model=Token)
+def google_auth(payload: GoogleAuthRequest):
+    db: Session = SessionLocal()
+    try:
+        try:
+            idinfo = google_id_token.verify_oauth2_token(
+                payload.credential,
+                google_requests.Request(),
+                GOOGLE_CLIENT_ID,
+            )
+        except ValueError:
+            raise HTTPException(
+                status_code=401,
+                detail="Invalid Google token",
+            )
+
+        email = idinfo.get("email")
+        if not email:
+            raise HTTPException(
+                status_code=400,
+                detail="Google account has no email",
+            )
+
+        name = idinfo.get("name") or email.split("@")[0]
+
+        existing_user = (
+            db.query(models.User)
+            .filter(models.User.email == email)
+            .first()
+        )
+
+        if not existing_user:
+            base_username = "".join(
+                ch for ch in name if ch.isalnum() or ch == "_"
+            ) or "user"
+            username = base_username
+            suffix = 1
+            while (
+                db.query(models.User)
+                .filter(models.User.username == username)
+                .first()
+            ):
+                username = f"{base_username}{suffix}"
+                suffix += 1
+
+            random_password = secrets.token_urlsafe(32)
+            hashed_password = password_hash.hash(random_password)
+
+            existing_user = models.User(
+                username=username,
+                email=email,
+                password=hashed_password,
+                is_verified=True,
+                verification_token=None,
+            )
+            db.add(existing_user)
+            db.commit()
+            db.refresh(existing_user)
+        elif not existing_user.is_verified:
+            existing_user.is_verified = True
+            db.commit()
+
+        access_token = create_access_token(
+            {"sub": str(existing_user.id)}
+        )
+        return {
+            "access_token": access_token,
+            "token_type": "bearer",
         }
     finally:
         db.close()
@@ -823,15 +904,3 @@ async def websocket_endpoint(
         manager.disconnect(
             current_user_id
         )
-
-@app.post("/test-email")
-async def test_email():
-    try:
-        await send_verification_email(
-            email="rabiulasif02@gmail.com",
-            username="TestUser",
-            token="test-token-123"
-        )
-        return {"status": "Email sent successfully"}
-    except Exception as e:
-        return {"error": str(e), "error_type": type(e).__name__}

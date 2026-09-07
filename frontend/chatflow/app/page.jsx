@@ -1,9 +1,10 @@
 "use client";
 import { useRouter } from "next/navigation";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
+const GOOGLE_CLIENT_ID = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || "";
 
 export default function Home() {
   const router = useRouter();
@@ -17,6 +18,79 @@ export default function Home() {
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
   const [registrationSuccess, setRegistrationSuccess] = useState(false);
+
+  const googleButtonRef = useRef(null);
+
+  async function handleGoogleCredential(response) {
+    setMessage("");
+    setLoading(true);
+
+    try {
+      const apiResponse = await fetch(`${API_URL}/auth/google`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          credential: response.credential,
+        }),
+      });
+
+      const data = await apiResponse.json();
+
+      if (!apiResponse.ok) {
+        throw new Error(data.detail || "Google sign-in failed.");
+      }
+
+      localStorage.setItem("access_token", data.access_token);
+
+      router.push("/chat");
+    } catch (error) {
+      setMessage(error.message);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    if (!GOOGLE_CLIENT_ID) {
+      return;
+    }
+
+    const scriptId = "google-identity-services";
+
+    function renderButton() {
+      if (!window.google || !googleButtonRef.current) {
+        return;
+      }
+
+      window.google.accounts.id.initialize({
+        client_id: GOOGLE_CLIENT_ID,
+        callback: handleGoogleCredential,
+      });
+
+      window.google.accounts.id.renderButton(googleButtonRef.current, {
+        theme: "outline",
+        size: "large",
+        width: "100%",
+        text: isLogin ? "signin_with" : "signup_with",
+      });
+    }
+
+    if (document.getElementById(scriptId)) {
+      renderButton();
+      return;
+    }
+
+    const script = document.createElement("script");
+    script.id = scriptId;
+    script.src = "https://accounts.google.com/gsi/client";
+    script.async = true;
+    script.defer = true;
+    script.onload = renderButton;
+    document.body.appendChild(script);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isLogin]);
 
   function validateForm() {
     const cleanUsername = username.trim();
@@ -253,6 +327,18 @@ router.push("/chat");
             Register
           </button>
 
+        </div>
+
+        {/* Google Sign-In */}
+        <div className="mt-6">
+          <div ref={googleButtonRef} className="flex justify-center" />
+        </div>
+
+        {/* Divider */}
+        <div className="flex items-center gap-3 mt-6">
+          <div className="h-px flex-1 bg-gray-200" />
+          <span className="text-xs text-gray-400 uppercase">or</span>
+          <div className="h-px flex-1 bg-gray-200" />
         </div>
 
         {/* Message */}

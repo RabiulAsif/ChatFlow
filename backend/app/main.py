@@ -79,6 +79,12 @@ def root():
         "message": "ChatFlow backend is running!"
     }
 # --------------------------------------------------
+# Debug - List Routes (TEMPORARY - remove after testing)
+# --------------------------------------------------
+@app.get("/debug/routes")
+def debug_routes():
+    return {"routes": [route.path for route in app.routes]}
+# --------------------------------------------------
 # Database Test
 # --------------------------------------------------
 @app.get("/db-test")

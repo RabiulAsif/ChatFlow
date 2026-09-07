@@ -823,3 +823,15 @@ async def websocket_endpoint(
         manager.disconnect(
             current_user_id
         )
+
+@app.post("/test-email")
+async def test_email():
+    try:
+        await send_verification_email(
+            email="rabiulasif02@gmail.com",
+            username="TestUser",
+            token="test-token-123"
+        )
+        return {"status": "Email sent successfully"}
+    except Exception as e:
+        return {"error": str(e), "error_type": type(e).__name__}
